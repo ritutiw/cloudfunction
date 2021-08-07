@@ -1,31 +1,28 @@
+def gcs_to_bq(event, context):
+    import re
+    from google.cloud import storage
+    from google.cloud import bigquery
+    from google.cloud.exceptions import NotFound
 
-import google.cloud.storage as storage
-import google.cloud.bigquery as bigquery
-import os
-
-def csv_in_gcs_to_table(event, context):
-
-    client = bigquery.Client()
-    bucket = os.environ["BUCKETNAME"]
-    object_name = event['FILENAME']
-    file_to_table_dict = os.environ(["FILE_TO_TABLE_MAPPING"])
-    table_id = ""
-    for file_name in file_to_table_dict:
-        if object_name.startswith(file_name):
-            table_id = file_to_table_dict[file_name]
-            break
-    bq_table  = bigquery.get_table(table_id)
-
-    job_config = bigquery.LoadJobConfig(
-        source_format=bigquery.SourceFormat.CSV,
-        field_delimiter="|",
-        write_disposition="WRITE_TRUNCATE",
-        skip_leading_rows=1,
-    )
-
-    uri = "gs://{}/{}".format(bucket, object_name)
-
-    load_job = client.load_table_from_uri(uri,
-                                          table_id,
-                                          job_config=job_config)
-    load_job.result()
+    bq_client = bigquery.Client()
+    bucket = storage.Client().bucket("BUCKET")
+    for blob in bucket.list_blobs(prefix="FOLDER/"):
+        if ".csv" in blob.name: #Checking for csv blobs as list_blobs also returns folder_name
+           job_config = bigquery.LoadJobConfig(
+               autodetect=True,
+               skip_leading_rows=1,
+               write_disposition="WRITE_TRUNCATE",
+               source_format=bigquery.SourceFormat.CSV,
+    
+           )
+           csv_filename = re.findall(r".*/(.*).csv",blob.name) #Extracting file name for BQ's table id
+           bq_table_id = "project-name.dataset-name."+csv_filename[0] # Determining table name
+       
+        uri = "gs://bucket-name/"+blob.name
+        print(uri)
+        load_job = bq_client.load_table_from_uri(
+                   uri, bq_table_id, job_config=job_config
+               )  # Make an API request.
+        load_job.result()  # Waits for the job to complete.
+        destination_table = bq_client.get_table(bq_table_id)  # Make an API request.
+        print("Table {} uploaded.".format(bq_table_id))
