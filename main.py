@@ -1,28 +1,37 @@
-def gcs_to_bq(event, context):
-    import re
-    from google.cloud import storage
-    from google.cloud import bigquery
-    from google.cloud.exceptions import NotFound
+import os
+from google.cloud import bigquery
 
-    bq_client = bigquery.Client()
-    bucket = storage.Client().bucket("BUCKET")
-    for blob in bucket.list_blobs(prefix="FOLDER/"):
-        if ".csv" in blob.name: #Checking for csv blobs as list_blobs also returns folder_name
-           job_config = bigquery.LoadJobConfig(
-               autodetect=True,
-               skip_leading_rows=1,
-               write_disposition="WRITE_TRUNCATE",
-               source_format=bigquery.SourceFormat.CSV,
-    
-           )
-           csv_filename = re.findall(r".*/(.*).csv",blob.name) #Extracting file name for BQ's table id
-           bq_table_id = "project-name.dataset-name."+csv_filename[0] # Determining table name
-       
-        uri = "gs://bucket-name/"+blob.name
-        print(uri)
-        load_job = bq_client.load_table_from_uri(
-                   uri, bq_table_id, job_config=job_config
-               )  # Make an API request.
-        load_job.result()  # Waits for the job to complete.
-        destination_table = bq_client.get_table(bq_table_id)  # Make an API request.
-        print("Table {} uploaded.".format(bq_table_id))
+def csv_loader(data, context):
+        client = bigquery.Client()
+        dataset_id = os.environ['DATASET']
+        dataset_ref = client.dataset(dataset_id)
+        job_config = bigquery.LoadJobConfig()
+        job_config.schema = [
+                bigquery.SchemaField('id', 'INTEGER'),
+                bigquery.SchemaField('first_name', 'STRING'),
+                bigquery.SchemaField('last_name', 'STRING'),
+                bigquery.SchemaField('email', 'STRING'),
+                bigquery.SchemaField('gender', 'STRING'),
+                bigquery.SchemaField('ip_address', 'STRING')
+                ]
+        job_config.skip_leading_rows = 1
+        job_config.source_format = bigquery.SourceFormat.CSV
+
+        # get the URI for uploaded CSV in GCS from 'data'
+        uri = 'gs://' + os.environ['BUCKET'] + '/' + data['name']
+
+        # lets do this
+        load_job = client.load_table_from_uri(
+                uri,
+                dataset_ref.table(os.environ['TABLE']),
+                job_config=job_config)
+
+        print('Starting job {}'.format(load_job.job_id))
+        print('Function=csv_loader, Version=' + os.environ['VERSION'])
+        print('File: {}'.format(data['name']))
+
+        load_job.result()  # wait for table load to complete.
+        print('Job finished.')
+
+        destination_table = client.get_table(dataset_ref.table(os.environ['TABLE']))
+        print('Loaded {} rows.'.format(destination_table.num_rows))
