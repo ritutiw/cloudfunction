@@ -8,3 +8,6 @@ Could you please advise on it how to load all files into Bq after doing necessar
 
 largest file is of around 1 GB.
 
+
+##Provide suggestion to consider all files.
+
