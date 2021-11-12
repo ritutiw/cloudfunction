@@ -5,3 +5,6 @@ Gcp cloud functions
  Issue with this code is it works fine with one table but as soon as i change logic to consider all files memory gets a concern.
  
 Could you please advise on it how to load all files into Bq after doing necessary transformation keeping memory in mind.
+
+largest file is of around 1 GB.
+
